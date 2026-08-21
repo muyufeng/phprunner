@@ -1,0 +1,6 @@
+# LOG_OUTPUT_LEVEL=error → Caddy 全局日志 ERROR
+log {
+	format {$CADDY_LOG_FORMAT:console}
+	output {$CADDY_LOG_OUTPUT:stdout}
+	level {$CADDY_SERVER_LOG_LEVEL:ERROR}
+}

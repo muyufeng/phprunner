@@ -1,0 +1,65 @@
+#!/bin/sh
+# ============================================================
+# phprunner-set-id [username] [uid]:[gid]
+# 构建期工具：改容器内指定用户/组的 uid/gid——dev bind mount 对齐
+# 宿主 uid 的官方姿势（权限三解法之一；讨论文档 §8 权限拍板）。
+#
+# 精髓来源：serversideup docker-php-serversideup-set-id 五条精髓
+# （幂等短路 / 冲突挪位 / 改ID≠改文件 / 防呆三连 / 仅构建期多阶段用法），
+# GPL-3.0 边界：自研实现，并修正其用户冲突分支 bug（挪占用者，
+# 而非目标用户——上游两版本该分支均错）。
+#
+# ⚠️ 配套必读：usermod/groupmod 只改 passwd/group 条目，已有文件属主
+#   仍指旧 uid（显示为无主数字）。改完必须 chown，下游用法示例：
+#   RUN phprunner-set-id www-data 1000:1000 && \
+#       chown -R 1000:1000 /var/www/html /config /data /etc/php/conf.d
+# ============================================================
+set -eu
+script_name="phprunner-set-id"
+
+# --- 防呆三连：参数个数 / root / 数值与用户存在性 ---
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $script_name [username] [uid]:[gid]"
+    exit 1
+fi
+if [ "$(id -u)" -ne 0 ]; then
+    echo "$script_name: 须以 root 运行（Dockerfile 中先 USER root）" >&2
+    exit 1
+fi
+
+username="$1"
+uid="$(echo "$2" | cut -d: -f1)"
+gid="$(echo "$2" | cut -d: -f2)"
+
+echo "$uid" | grep -qE '^[0-9]+$' || { echo "$script_name: uid 须为数字" >&2; exit 1; }
+echo "$gid" | grep -qE '^[0-9]+$' || { echo "$script_name: gid 须为数字" >&2; exit 1; }
+id "$username" >/dev/null 2>&1 || { echo "$script_name: 用户 $username 不存在" >&2; exit 1; }
+
+# --- 幂等短路：已达标即成功（RUN 可重复、层缓存友好）---
+current_uid="$(id -u "$username")"
+current_gid="$(id -g "$username")"
+if [ "$current_uid" -eq "$uid" ] && [ "$current_gid" -eq "$gid" ]; then
+    echo "$script_name: ✅ $username 已是 $uid:$gid，无需变更"
+    exit 0
+fi
+
+# --- 冲突挪位：目标 ID 被占时，占用者挪 99<id> 前缀让位 ---
+# （占用者==目标自身时跳过——部分达标场景：uid 同 gid 异等）
+occupier_group="$(getent group "$gid" | cut -d: -f1 || true)"
+if [ -n "$occupier_group" ] && [ "$occupier_group" != "$username" ]; then
+    echo "$script_name: ⚡️ 组 $occupier_group 占用 gid $gid → 挪至 99$gid"
+    groupmod -g "99$gid" "$occupier_group"
+fi
+
+occupier_user="$(getent passwd "$uid" | cut -d: -f1 || true)"
+if [ -n "$occupier_user" ] && [ "$occupier_user" != "$username" ]; then
+    # 上游 bug 修正点：挪的是占用者 occupier_user，不是目标 $username
+    echo "$script_name: ⚡️ 用户 $occupier_user 占用 uid $uid → 挪至 99$uid"
+    usermod -u "99$uid" "$occupier_user"
+fi
+
+# --- 改 ID（passwd/group 条目；文件属主不动，见头部配套说明）---
+groupmod -g "$gid" "$username"
+usermod -u "$uid" "$username"
+
+echo "$script_name: ✅ $username → $uid:$gid（记得配套 chown 可写目录）"

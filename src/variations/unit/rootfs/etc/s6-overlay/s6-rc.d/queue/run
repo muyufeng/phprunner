@@ -1,0 +1,11 @@
+#!/command/with-contenv sh
+# phprunner runtime 形态：队列 worker（NTS 二进制，§7 拍板路径）
+# SIGTERM 优雅退出 = M2-05 实证（完成 in-flight job 再退）
+# QUEUE_ENABLED=false → s6-pause 占位（服务在册但不跑 worker；
+# 对应 healthcheck-queue 探针随之失效，属预期）
+# queue:work 默认参数（tries/timeout/sleep）为 §8 小项挂账——当前裸跑，
+# 用户经容器 env/compose 层注入 artisan 参数的能力待 M4 样例评估
+if [ "${QUEUE_ENABLED:-true}" != "true" ]; then
+    exec s6-pause
+fi
+exec php "${APP_BASE_DIR:-/var/www/html}/artisan" queue:work

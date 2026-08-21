@@ -1,0 +1,150 @@
+# ============================================================
+# phprunner 主 Caddyfile（web / runtime 形态共用）
+# 文档：docs/project-structure.md §1（control/frankenphp/）
+#       docs/static-php-runtime-discussion.md §6 #4（模式来源）
+#
+# 机制（§8 ENV 调研机制①）：{$VAR:default} 为 Caddy 原生运行期展开，
+#   零文本渲染；片段选择也原生（import ssl-mode/{$SSL_MODE:off}.caddyfile）。
+#   相对 import 以本文件所在目录（镜像内 /etc/frankenphp）为基准。
+#
+# ENV 接口（四层命名空间之 CADDY_*+SSL_* 层；默认值与镜像 Dockerfile
+#   ENV 块同源维护）。v1 未纳入 acme-profile 片段（经 CADDY_GLOBAL_OPTIONS
+#   逃逸门可达）。
+# 模式参考 serversideup frankenphp 形态（GPL-3.0 边界：自研实现）
+# ============================================================
+
+{
+	admin {$CADDY_ADMIN:off}
+
+	import auto-https/{$CADDY_AUTO_HTTPS:off}.caddyfile
+
+	http_port {$CADDY_HTTP_PORT:8080}
+	https_port {$CADDY_HTTPS_PORT:8443}
+
+	skip_install_trust
+
+	import log-level/global/{$LOG_OUTPUT_LEVEL:warn}.caddyfile
+
+	frankenphp {
+		{$FRANKENPHP_CONFIG}
+		# worker 注册（仅 worker 模式有内容；M2-04 判据⑤/⑦）
+		import worker-mode/global/{$CADDY_WORKER_MODE:classic}.caddyfile
+	}
+
+	# 反代/CDN 后取真实客户端 IP（默认 local=私网+回环，内网部署假设；
+	# 2026-08-16 拍板：不照抄上游的 cloudflare 默认）
+	import trusted-proxy/{$TRUSTED_PROXY:local}.caddyfile
+
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+########################################################
+# 片段（snippets）
+########################################################
+
+# TLS 证书来源二选一（名字与动态拼接 import tls-{$CADDY_AUTO_HTTPS:off} 对齐）：
+# CADDY_AUTO_HTTPS=off → tls-off 显式证书对；否则 tls-on 交由 Caddy 自动管理
+(tls-off) {
+	tls {$SSL_CERTIFICATE_FILE:/etc/ssl/private/web.crt} {$SSL_PRIVATE_KEY_FILE:/etc/ssl/private/web.key}
+}
+(tls-on) {
+	# auto_https≠off 时无需 tls 指令
+}
+
+# 应用公共逻辑（各 ssl-mode 复用）
+(php-app-common) {
+	root * {$CADDY_SERVER_ROOT:/var/www/html/public}
+
+	encode zstd br gzip
+
+	import log-level/address/{$LOG_OUTPUT_LEVEL:warn}.caddyfile
+
+	# 三路健康契约之②：容器自带 /healthcheck 兜底路由（不依赖应用代码；
+	# log_skip 防刷日志）
+	@builtin-healthcheck path /healthcheck
+	respond @builtin-healthcheck "OK" 200
+	log_skip @builtin-healthcheck
+
+	# 三路健康契约之③：应用深检路由路径（探针经 healthcheck-web HTTP 打）
+	@app-healthcheck path {$HEALTHCHECK_PATH:/healthcheck}
+	log_skip @app-healthcheck
+
+	# /index.php/... → /...（SEO 去重）
+	@indexphp path_regexp indexphp ^/index\.php(/.+)$
+	redir @indexphp {re.indexphp.1} 301
+
+	php_server {
+		{$CADDY_PHP_SERVER_OPTIONS}
+		import worker-mode/server/{$CADDY_WORKER_MODE:classic}.caddyfile
+	}
+	file_server
+
+	import performance
+	import security
+
+	{$CADDY_SERVER_EXTRA_DIRECTIVES}
+}
+
+(performance) {
+	# 静态资源长缓存（内容寻址文件名的部署假设）
+	@static {
+		path *.css *.css.map *.js *.js.map *.jpg *.jpeg *.png *.gif *.ico *.cur *.heic *.webp *.tif *.tiff *.mp3 *.m4a *.aac *.ogg *.midi *.mid *.wav *.mp4 *.mov *.webm *.mpeg *.mpg *.avi *.ogv *.flv *.wmv *.htc *.gz *.svg *.svgz *.woff2 *.woff
+	}
+	header @static Cache-Control "public, immutable, stale-while-revalidate, max-age=31536000"
+
+	# 字体跨域（缓存头继承 @static）
+	@fonts {
+		path *.svg *.svgz *.ttf *.ttc *.otf *.eot *.woff *.woff2
+	}
+	header @fonts Access-Control-Allow-Origin "*"
+
+	# 短缓存静态
+	@staticshort {
+		path *.json *.xml *.rss
+	}
+	header @staticshort Cache-Control "no-cache, max-age=3600"
+
+	# 噪音资源不记日志
+	@meta path /favicon.ico /robots.txt
+	log_skip @meta
+}
+
+(security) {
+	# Laravel storage 目录禁执行 PHP（防上传恶意 PHP；Livewire
+	# GHSA-29cq-5w36-x7w3 类防线）
+	@storage-php path_regexp ^/storage/.*\.php$
+	respond @storage-php 403
+
+	# 敏感后缀/点文件拒绝（.well-known 例外：RFC 8615 ACME 挑战）
+	@rejected {
+		path *.bak *.conf *.config *.dist *.inc *.ini *.log *.sh *.sql *.swp *.swo *~ */.*
+		not path /.well-known/*
+	}
+	respond @rejected 403
+
+	# 安全响应头（OWASP Secure Headers）
+	header {
+		defer
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		-X-Powered-By
+	}
+}
+
+(security-https) {
+	header {
+		defer
+		Strict-Transport-Security "max-age=31531500; includeSubDomains"
+	}
+}
+
+########################################################
+# 动态装配（ENV 选片段）
+########################################################
+
+import ssl-mode/{$SSL_MODE:off}.caddyfile
+
+# 用户扩展位：挂载任意 *.caddyfile 即生效
+import caddyfile.d/*.caddyfile

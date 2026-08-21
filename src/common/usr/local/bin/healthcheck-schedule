@@ -1,0 +1,7 @@
+#!/bin/sh
+# ============================================================
+# healthcheck-schedule：cli/runtime 形态进程级探针（serversideup 同款）
+# schedule:work 进程在场即健康；scheduler 单实例约束在 compose 层固化（§2）
+# 依赖 pgrep（procps，images/ 公共基础包）；HEALTHCHECK 指令引用
+# ============================================================
+pgrep -f "schedule:work" >/dev/null 2>&1

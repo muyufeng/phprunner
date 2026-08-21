@@ -1,0 +1,55 @@
+# ============================================================
+# phprunner —— 仅构建产物（make binaries → build/artifacts/）
+#
+# 范围约定（与根 Makefile 对齐）：
+#   - 只跑 binaries（双二进制 + BUILD-INFO），不碰 smoke / images
+#   - 产物经 actions/upload-artifact 留存，不发 release、不推镜像
+#   - TARGET_ARCH 须与 runner 架构一致（Makefile 约定，不做交叉编译），
+#     故跑在 ubuntu-latest（x86_64），对应 versions.env TARGET_ARCH=x86_64
+#
+# GITHUB_TOKEN：CI 里直接用内置 ${{ secrets.GITHUB_TOKEN }}（60/h → 5000/h），
+#   无需 build/secrets.env（该文件是本地构建的密钥通道，CI 内不存在）。
+#   ⚠️ secrets.GITHUB_TOKEN 不进 build-arg / 不落盘，只以环境变量注入 job，
+#   与 Makefile 的"宿主环境变量兜底"路径一致。
+# ============================================================
+
+name: build-artifacts
+
+on:
+  push:
+    branches: [dev/**, main]
+  workflow_dispatch: {}
+
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # Makefile 宿主环境变量兜底路径
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # BuildKit cache mount（两个 Dockerfile 的 --mount=type=cache）随 runner
+      # 生命周期存续；buildx 默认 driver（docker-container）开箱即用，无需额外 setup
+      - name: 构建双二进制（make binaries）
+        run: make binaries
+
+      # 成对校验（binaries 目标内已做，此处再留一道显式断言供 CI 日志审计）
+      - name: 成对产物核验
+        run: |
+          set -euo pipefail
+          ls -lh build/artifacts/
+          cat build/artifacts/BUILD-INFO
+          cd build/artifacts && sha256sum -c <(grep -E '^[0-9a-f]{64} ' BUILD-INFO)
+
+      # 留存窗口默认 90 天；产物 = 双二进制 + BUILD-INFO（版本/git/sha256 全追溯）
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: phprunner-binaries-${{ github.sha }}
+          path: |
+            build/artifacts/frankenphp-linux-x86_64
+            build/artifacts/php-cli-linux-x86_64
+            build/artifacts/BUILD-INFO
+          if-no-files-found: error
+          retention-days: 30

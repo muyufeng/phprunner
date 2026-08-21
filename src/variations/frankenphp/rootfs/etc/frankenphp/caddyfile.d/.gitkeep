@@ -1,0 +1,2 @@
+# 用户扩展位：挂载任意 *.caddyfile 到本目录即被主 Caddyfile import
+# （零改动扩展路由/站点的逃生门）

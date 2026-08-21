@@ -1,0 +1,1 @@
+# CADDY_WORKER_MODE=classic（默认）：无 worker 注册，每请求独立执行

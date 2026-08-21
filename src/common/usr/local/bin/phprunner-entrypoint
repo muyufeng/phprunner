@@ -1,0 +1,30 @@
+#!/bin/sh
+# ============================================================
+# phprunner 统一入口（三镜像共用）
+# 文档：docs/project-structure.md §1（control/common/usr/local/bin/phprunner-entrypoint
+#       ——路径镜像式布局，本文件在镜像内即 /usr/local/bin/phprunner-entrypoint）
+#       docs/static-php-runtime-discussion.md §2（进程模型）
+#
+# 机制：entrypoint.d/NN-*.sh 按文件名编号顺序 source 执行，
+#       最后 exec "$@" ——目标进程即 PID 1，信号直达无中转
+#       （web/cli 单进程直跑的核心保证，§2）
+#
+# 注意：POSIX sh（trixie 底座 dash）；脚本以 source 方式进入，
+#       子脚本用 `return N 2>/dev/null || exit N` 兼容独立执行。
+#       x 位不依赖：镜像 COPY --chmod=755；挂载调试走 sh 入口。
+# ============================================================
+set -eu
+
+ENTRYPOINT_D="${ENTRYPOINT_D:-/etc/entrypoint.d}"
+
+if [ -d "$ENTRYPOINT_D" ]; then
+    for script in "$ENTRYPOINT_D"/*.sh; do
+        [ -f "$script" ] || continue
+        if [ "${LOG_OUTPUT_LEVEL:-}" = "debug" ]; then
+            echo "👉 entrypoint: $script" >&2
+        fi
+        . "$script"
+    done
+fi
+
+exec "$@"

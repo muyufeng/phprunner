@@ -1,0 +1,29 @@
+#!/bin/bash
+# ============================================================
+# phprunner frankenphp 形态 php 垫片（frankenphp 官方 known-issues 的
+# "Composer scripts referencing @php" 同款思路，自研实现）
+# 文档：docs/static-php-runtime-discussion.md §4.1 / §7.2
+#       docs/结构设计-v0.2.0.md（variations/frankenphp 自有资产）
+#
+# 作用：frankenphp 形态拥有 `php` 命令——转发到 `frankenphp php-cli`，
+#   并剥掉其不支持的 `-d key=value`（官方确认未支持项）。位置与传统
+#   php 安装目录一致（/usr/local/bin/php，官方镜像标准位）。配套镜像
+#   ENV PHP_BINARY=/usr/local/bin/php 供 composer @php scripts 探测。
+#   unit 形态继承本垫片后由真 NTS php 同位覆盖。
+#
+# ⚠️ 边界（§9 #6 实证，勿越界）：
+#   - 垫片背后是 ZTS 侧 php-cli：仅一次性脚本/工具链（composer 等）；
+#     常驻/信号驱动进程禁止（SIGTERM/SIGINT → 段错误，M2-07）
+#   - `-r` + 尾随 argv 不传参（M3-2 实证）：传参走 ENV + getenv 或脚本文件
+#   - 常驻 worker 用 cli 形态（NTS，§7 拍板）
+# ============================================================
+args=("$@")
+index=0
+for a in "$@"; do
+    if [ "$a" = "-d" ]; then
+        unset "args[$index]"
+        unset "args[$((index + 1))]"
+    fi
+    index=$((index + 1))
+done
+exec /usr/local/bin/frankenphp php-cli "${args[@]}"

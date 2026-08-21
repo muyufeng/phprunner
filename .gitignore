@@ -1,13 +1,15 @@
-# Wordpress - ignore core, configuration, examples, uploads and logs.
-# https://github.com/github/gitignore/blob/main/WordPress.gitignore
+# 构建产物（双二进制成对产出，可随时 make binaries 重建）
+build/artifacts/
 
-# Core
-#
-# Note: if you want to stage/commit WP core files
-# you can delete this whole section/until Configuration.
+# spc 交互调试（./dev builder）时可能落在挂载目录的下载缓存
+build/downloads/
 
-# Log files
-*.log
+# 构建密钥（GITHUB_TOKEN 等）：模板为 build/secrets.env.example，真实文件永不入库
+# ——防的不是"现在"，是历史：git 里的文件永不消失，协作者/CI/未来开源都会继承
+build/secrets.env
 
-# htaccess
-/.htaccess
+# 冒烟：原始报告 + 动态生成的 Laravel 样例 + 运行缓存
+# （.cache = composer.phar/composer 家与缓存/HTTP 助手，均可随时删）
+smoke/report/
+smoke/app-runtime/
+smoke/.cache/

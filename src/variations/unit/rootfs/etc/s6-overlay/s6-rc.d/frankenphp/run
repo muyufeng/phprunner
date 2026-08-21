@@ -1,0 +1,7 @@
+#!/command/execlineb -P
+# phprunner runtime 形态：frankenphp web 服务（§6 #1#2 模式）
+# 服务随容器 USER 运行（默认 www-data 非特权——无 setuidgid 必要；
+# 若用户提 root 运行，服务同样以 root 跑，属用户显式选择）
+with-contenv
+s6-notifyoncheck -d
+frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile

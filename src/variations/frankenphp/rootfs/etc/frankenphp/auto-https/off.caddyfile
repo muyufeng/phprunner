@@ -1,0 +1,2 @@
+# CADDY_AUTO_HTTPS=off：关闭 Caddy 自动 HTTPS（证书由 SSL_*_FILE 显式提供）
+auto_https off

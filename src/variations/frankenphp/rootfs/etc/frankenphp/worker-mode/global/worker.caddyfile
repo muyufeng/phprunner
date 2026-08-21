@@ -1,0 +1,7 @@
+# CADDY_WORKER_MODE=worker：全局 worker 注册
+# 语法同构 octane 官方 stub（M2-04 判据⑥实证可跑）；
+# CADDY_WORKER_NUM 省略 = 引擎默认 2 workers/CPU（判据⑤），设置形如 "num 4"
+worker {
+	file {$CADDY_WORKER_FILE:/var/www/html/public/index.php}
+	{$CADDY_WORKER_NUM}
+}

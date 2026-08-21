@@ -1,0 +1,9 @@
+#!/command/with-contenv sh
+# phprunner runtime 形态：调度器（NTS 二进制）
+# SIGTERM 优雅退出 = M2-06 实证（分钟边界 tick + 0s 收敛）
+# SCHEDULER_ENABLED=false → s6-pause 占位（服务在册但不跑调度）
+# 单实例约束（schedule:work 并发无意义）在 compose 层固化（§2/M4）
+if [ "${SCHEDULER_ENABLED:-true}" != "true" ]; then
+    exec s6-pause
+fi
+exec php "${APP_BASE_DIR:-/var/www/html}/artisan" schedule:work

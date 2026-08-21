@@ -1,0 +1,4 @@
+# SSL_MODE=off：仅 HTTP
+{$CADDY_HTTP_SERVER_ADDRESS:http://} {
+	import php-app-common
+}

@@ -1,0 +1,13 @@
+# SSL_MODE=full：HTTP 仅重定向 HTTPS，业务流量全走 TLS
+# 注（与 serversideup 的有意差异）：不做 localhost 自签健康检查专服
+# （其 HEALTHCHECK_SSL_* 机制），healthcheck-web 探针自带 http →
+# https(-k) 回退（M3-5）——配置面更薄，无运行期证书生成依赖
+{$CADDY_HTTP_SERVER_ADDRESS:http://} {
+	redir https://{host}{uri} 308
+}
+
+{$CADDY_HTTPS_SERVER_ADDRESS:https://} {
+	import tls-{$CADDY_AUTO_HTTPS:off}
+	import php-app-common
+	import security-https
+}

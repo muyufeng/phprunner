@@ -1,0 +1,18 @@
+#!/bin/sh
+# ============================================================
+# healthcheck-web：web/runtime 形态容器级探针（三路契约之①）
+# 文档：docs/static-php-runtime-discussion.md §8（三路制拍板）
+#
+# 先打 HTTP；SSL_MODE=full 时 HTTP 只回 308 → 回退 https（-k：
+# 内网证书自签/域名不匹配常态）——薄方案，不做上游的 localhost
+# 自签健康专服（见 ssl-mode/full.caddyfile 注）
+# 依赖镜像内 curl（images/ 公共基础包）；HEALTHCHECK 指令引用本脚本
+# ============================================================
+: "${CADDY_HTTP_PORT:=8080}"
+: "${CADDY_HTTPS_PORT:=8443}"
+: "${HEALTHCHECK_PATH:=/healthcheck}"
+
+if curl -fsS --max-time 3 "http://127.0.0.1:${CADDY_HTTP_PORT}${HEALTHCHECK_PATH}" >/dev/null 2>&1; then
+    exit 0
+fi
+curl -kfsS --max-time 3 "https://127.0.0.1:${CADDY_HTTPS_PORT}${HEALTHCHECK_PATH}" >/dev/null 2>&1

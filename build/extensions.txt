@@ -1,0 +1,78 @@
+# ============================================================
+# phprunner 冻结扩展清单（单一事实源②）
+# 文档：docs/static-php-runtime-discussion.md §5（v2.1 增补 phar）
+#       docs/project-structure.md §1（build/extensions.txt）
+#
+# 用法：根 Makefile 剥离本文件注释/空行 → 逗号列表 → 喂给两个构建器：
+#   - php-cli：spc（gnu.2.17 半静态，NTS）
+#   - frankenphp：官方 static-builder 的 PHP_EXTENSIONS（ZTS）
+#
+# 机器行规则：每行一个扩展名（构建器可选项），行首小写字母开头、
+#             可含数字/下划线/连字符（如 password-argon2）；
+#             # 开头为注释；空行忽略。
+#             消费方正则：^[a-z0-9_-]+$（根 Makefile 的 EXT_COMMA 与
+#             smoke/lib.sh 的 ext_list 必须保持一致）
+#
+# ⚠️ 语义：白名单替换（仅安装），非补充——
+#   - frankenphp PHP_EXTENSIONS：传参即替换官方默认全家桶，无合并
+#     （不传参 = 官方"最受欢迎"默认集，本仓库永不依赖该模式）
+#   - spc build:php：按清单编译 + 自动补齐依赖闭包（如 pdo_mysql→pdo/mysqlnd）
+#   - 恒开核心（Core/date/json/pcre/spl/standard/reflection…）无条件编入，
+#     不受本清单控制（见下方"恒开核心"注释区）
+#   - 推论：漏写 = 构建期不报错、运行期缺扩展；完备性由 §5 决策 +
+#     01 冒烟 subset 对账双重把关
+#
+# 恒开核心（PHP 默认编入、无须选择；01 冒烟 php -m 对账时额外期待出现，
+#           不在本文件机器行内）：
+#   hash  pcre
+#   ⚠️ TODO(M1)：filter 归属（恒开 or 可选）按 spc 扩展名表核对后定稿
+#
+# 两构建器命名差异登记处（M1 首编发现即登记，不另建映射文件）：
+#   （暂无；形如：phpredis ↔ redis）
+# ============================================================
+
+# --- Laravel 硬性 ext-*（§5）---
+ctype
+curl
+dom
+fileinfo
+filter
+mbstring
+openssl
+pdo
+session
+tokenizer
+xml
+simplexml
+xmlreader
+xmlwriter
+
+# --- 驱动 / 队列 / 缓存 / 杂项（§5）---
+pdo_mysql
+pdo_sqlite
+sqlite3
+redis
+pcntl
+posix
+opcache
+bcmath
+zip
+
+# --- Excel 导入导出（2026-08-16 加入；spc 支持经 issue #65 / commit aa9ec6e；
+#     Swoole 生态出身，ZTS 兼容性验证充分）---
+xlswriter
+
+# --- 对照官方 defaultExtensions 增补（2026-08-16，A+B 层，讨论文档 §5）---
+# A 层（缺失即坑）：readline（artisan tinker 交互基础）
+# B 层（Laravel 原生路径，缺失=报错或降级）：password-argon2（hashing 的
+#   argon2id 驱动）、sodium（现代加密）、iconv（生态高频软依赖）、
+#   mbregex（mbstring 成对，mb_ereg_*）
+# （A 层的 pdo_sqlite/sqlite3/posix 已并入上方驱动组）
+readline
+password-argon2
+sodium
+iconv
+mbregex
+
+# --- 工具链：composer.phar 运行前提（§5 v2.1 / §7.2）---
+phar

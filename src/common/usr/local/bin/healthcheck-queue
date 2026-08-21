@@ -1,0 +1,7 @@
+#!/bin/sh
+# ============================================================
+# healthcheck-queue：cli/runtime 形态进程级探针（serversideup 同款）
+# queue:work 进程在场即健康（NTS 二进制跑 worker，§7 拍板路径）
+# 依赖 pgrep（procps，images/ 公共基础包）；HEALTHCHECK 指令引用
+# ============================================================
+pgrep -f "queue:work" >/dev/null 2>&1

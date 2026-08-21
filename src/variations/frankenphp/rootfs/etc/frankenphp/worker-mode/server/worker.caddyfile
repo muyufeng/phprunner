@@ -1,0 +1,8 @@
+# 派发规则（M2-04 判据①）：请求解析出的 SCRIPT_FILENAME 必须就是
+# worker 文件本身——未命中路径回退到应用入口 index.php（判据⑦ Laravel
+# 裸 worker 接法同构；octane stub 同款 try_files 形态）
+# ⚠️ try_files 候选按 root 相对解析（绝对路径会被拼接到 root 之后——
+# M3-3 实证 404）；自定义 worker 文件名时，此处的 index.php 需经
+# CADDY_PHP_SERVER_OPTIONS 注入自己的 try_files 同步覆盖（与全局
+# CADDY_WORKER_FILE 指向同一文件）
+try_files {path} /index.php

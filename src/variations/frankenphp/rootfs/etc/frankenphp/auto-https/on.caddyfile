@@ -1,0 +1,2 @@
+# CADDY_AUTO_HTTPS=on：Caddy 自动 HTTPS（默认行为，无需显式指令；
+# 内网域名/自签场景用）

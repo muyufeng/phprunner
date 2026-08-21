@@ -1,0 +1,6 @@
+# LOG_OUTPUT_LEVEL=notice → 映射 Caddy INFO（zap 无 notice 级）
+log {
+	format {$CADDY_LOG_FORMAT:console}
+	output {$CADDY_LOG_OUTPUT:stdout}
+	level {$CADDY_SERVER_LOG_LEVEL:INFO}
+}
