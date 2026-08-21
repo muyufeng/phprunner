@@ -20,7 +20,7 @@
 #     ENTRYPOINT 运行时执行构建 + docker cp 提取；本包装改为 build 期
 #     固化参数执行。✔ 已验证成立（2026-08-16 M1 产物即全套冒烟基座），
 #     原 compose 运行时回退方案随 docker-compose.yaml 一并移除。
-#   - 需要时注入 GITHUB_TOKEN build-arg 避开 API 限流（官方文档）
+#   - 需要时经 --secret 注入 GITHUB_TOKEN 避开 API 限流（build-static.sh 读同名 env）
 #   - spc 版本锁定（§9 #12 已有源码级结论）：SPC_REL_TYPE 仅 source(main+pull)/
 #     binary(nightly)，无 pin 接口 → 唯一稳态锚点 = STATIC_BUILDER_IMAGE digest
 #     （versions.env 的 TODO 已升级为必填）
@@ -42,12 +42,10 @@ ARG PHP_VERSION=8.5.9
 # 扩展名列表即 spc 扩展名（官方 builder 直接透传给内部 spc）
 ARG PHP_EXTENSIONS="bcmath"
 ARG PHP_EXTENSION_LIBS=""
-# 可选：避 GitHub API 限流（容器内 clone frankenphp/spc 源码时）。
-# 传入方式：宿主环境变量 → Makefile 透传 build-arg（GITHUB_TOKEN=ghp_xxx make frankenphp）。
-# ⚠️ 禁止写进任何入库文件；用 fine-grained PAT、零权限（公开仓库读取仅提限额）+ 短有效期。
-# 泄露面说明：ARG 会出现在中间镜像的 docker history——但本构建只导出 FROM scratch
-# 产物层（无 ENV/ARG 元数据），且 builder 层即弃，实际风险极低
-ARG GITHUB_TOKEN=""
+# token 经 --secret id=github_token 注入（Makefile 读宿主环境变量）而非 ARG/build-arg：
+# build-arg 值参与 BuildKit 缓存键，CI 每轮 GITHUB_TOKEN 轮换会让层缓存永远 miss；
+# secret 挂载不进缓存键、不落镜像 history（原 ARG 方案的泄露面一并消除）。
+# 密钥约定不变：fine-grained PAT、零权限（公开仓库读取仅提限额）+ 短有效期，禁止入库
 
 # 官方构建脚本的环境变量接口
 # （frankenphp.dev/docs/static → "Customizing the FrankenPHP static build"；
@@ -93,7 +91,9 @@ RUN cd /tmp && curl -fsSL -o re2c.tgz \
 #   以非零退出（上游尾部小毛病），会连坐整个 RUN 层。处置：容忍脚本退出码，
 #   以产物存在性为准——buildroot/bin/frankenphp 正是 sanity check 验证过的那份
 RUN --mount=type=cache,target=/go/src/app/dist/static-php-cli/downloads \
-    cd /go/src/app && rm -rf dist/static-php-cli/buildroot \
+    --mount=type=secret,id=github_token \
+    export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    && cd /go/src/app && rm -rf dist/static-php-cli/buildroot \
     && { ./build-static.sh || echo "⚠️ build-static.sh 非零退出（收尾记账），以产物为准"; } \
     && ls -lh dist/static-php-cli/buildroot/bin/ \
     && test -x dist/static-php-cli/buildroot/bin/frankenphp

@@ -3,14 +3,23 @@
 #
 # 范围约定（与根 Makefile 对齐）：
 #   - 只跑 binaries（双二进制 + BUILD-INFO），不碰 smoke / images
-#   - 产物经 actions/upload-artifact 留存，不发 release、不推镜像
+#   - 产物经功能核验（make verify：版本对账 + 扩展全覆盖）后才上传留存，
+#     不发 release、不推镜像
 #   - TARGET_ARCH 须与 runner 架构一致（Makefile 约定，不做交叉编译），
 #     故跑在 ubuntu-latest（x86_64），对应 versions.env TARGET_ARCH=x86_64
 #
+# 提速（2026-08-21）：
+#   - GHA 外部 BuildKit 缓存（setup-buildx-action + type=gha）：版本/扩展/
+#     Dockerfile 不变时重编译层直接命中，跨轮不再全量编 PHP；token 改走
+#     --secret 不进 build-arg（build-arg 值参与缓存键，token 轮换会炸缓存）
+#   - make -j2 双二进制并行（frankenphp / php-cli 相互独立，
+#     Makefile 侧 .dist / .dist-cli 落盘目录已拆分）
+#   - APT_MIRROR= 置空：runner 在海外，绕国内镜像走官方源
+#
 # GITHUB_TOKEN：CI 里直接用内置 ${{ secrets.GITHUB_TOKEN }}（60/h → 5000/h），
 #   无需 build/secrets.env（该文件是本地构建的密钥通道，CI 内不存在）。
-#   ⚠️ secrets.GITHUB_TOKEN 不进 build-arg / 不落盘，只以环境变量注入 job，
-#   与 Makefile 的"宿主环境变量兜底"路径一致。
+#   ⚠️ secrets.GITHUB_TOKEN 仅以环境变量注入 job，由 Makefile 经 buildx
+#   --secret 传递（不进 build-arg / 不落盘 / 不进缓存键）。
 # ============================================================
 
 name: build-artifacts
@@ -18,21 +27,41 @@ name: build-artifacts
 on:
   push:
     branches: [dev/**, main]
+    # 路径过滤：仅构建相关文件变更才触发重构建（文档/IDE 配置变更不陪跑）；
+    # 手动兜底通道 = workflow_dispatch
+    paths:
+      - 'build/**'
+      - 'src/**'
+      - 'Makefile'
+      - '.github/workflows/build-artifacts.yml'
   workflow_dispatch: {}
+
+# 同分支后一次推送取消前一次运行：产物从源码全量可复现，旧轮无需跑完
+# （缓存已填充的前提下，新一轮命中缓存后反而更快）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   binaries:
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # Makefile 宿主环境变量兜底路径
+      # BuildKit 外部缓存：同一 scope 跨轮复用（底座镜像 + 重编译层）；
+      # versions.env / extensions.txt / Dockerfile 任一变更 → build-arg/层内容变化自动失效
+      BUILDX_CACHE_ARGS: --cache-from type=gha,scope=phprunner-binaries --cache-to type=gha,scope=phprunner-binaries,mode=max
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # BuildKit cache mount（两个 Dockerfile 的 --mount=type=cache）随 runner
-      # 生命周期存续；buildx 默认 driver（docker-container）开箱即用，无需额外 setup
-      - name: 构建双二进制（make binaries）
-        run: make binaries
+      # type=gha 缓存后端要求 docker-container driver 的 buildx builder
+      # （runner 默认 docker driver 不支持 --cache-from type=gha）
+      - name: 准备 Buildx builder
+        uses: docker/setup-buildx-action@v3
+
+      # -j2：frankenphp / php-cli 并行；APT_MIRROR=：CI 海外 runner 用官方源
+      - name: 构建双二进制（make -j2 binaries）
+        run: make -j2 binaries APT_MIRROR=
 
       # 成对校验（binaries 目标内已做，此处再留一道显式断言供 CI 日志审计）
       - name: 成对产物核验
@@ -42,9 +71,15 @@ jobs:
           cat build/artifacts/BUILD-INFO
           cd build/artifacts && sha256sum -c <(grep -E '^[0-9a-f]{64} ' BUILD-INFO)
 
+      # 功能核验（make verify）：宿主直跑二进制——版本与 versions.env 精确匹配，
+      # extensions.txt 全清单探测（mbregex/password-argon2 等伪扩展已做名称映射）；
+      # 不过则阻断上传，产物不留带疑版本
+      - name: 产物功能核验（make verify）
+        run: make verify
+
       # 留存窗口默认 90 天；产物 = 双二进制 + BUILD-INFO（版本/git/sha256 全追溯）
       - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: phprunner-binaries-${{ github.sha }}
           path: |

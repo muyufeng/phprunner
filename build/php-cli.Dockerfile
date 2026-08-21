@@ -104,11 +104,10 @@ FROM spc-env AS build
 
 ARG PHP_VERSION=8.5.9
 ARG PHP_EXTENSIONS="bcmath"
-# 可选：避 GitHub API 限流（spc download 查询扩展 release/tags 时）。
-# 与 frankenphp.Dockerfile 同款——匿名 60/h 限额下 spc download 会退回
-# dl.static-php.dev 镜像源，而该源 TLS 偶发不稳（2026-08-17 实测 curl 35），
-# 故 php-cli 同样注入 token，让 GitHub 主源直接成功，不依赖镜像 fallback。
-ARG GITHUB_TOKEN=""
+# token 经 --secret id=github_token 注入（同 frankenphp.Dockerfile）而非 ARG/build-arg：
+# build-arg 值参与缓存键，CI 每轮 token 轮换会让层缓存永远 miss。背景不变：
+# 匿名 60/h 限额下 spc download 会退回 dl.static-php.dev 镜像源，而该源 TLS 偶发
+# 不稳（2026-08-17 实测 curl 35），故注入 token 让 GitHub 主源直接成功。
 # ⚠️ 教训（M1 第九轮）：禁止在此声明名为 TARGET_ARCH 的 ARG——ARG 会注入 RUN 环境变量，
 #   而 make 内建隐式规则拼接 $(TARGET_ARCH)，zig cc 会把裸词 "x86_64" 当输入文件
 #   （libargon2 的 Makefile 依赖隐式规则，是唯一受害者）。架构信息只活在 Makefile 侧。
@@ -123,11 +122,15 @@ ENV SPC_TARGET=native-native-gnu.2.17
 #   且缓存内容不进镜像层；两步共享同一 target（编译步骤要读 downloads/）
 #   docker builder prune 才清
 RUN --mount=type=cache,target=/work/downloads \
-    spc download --with-php="${PHP_VERSION}" \
+    --mount=type=secret,id=github_token \
+    export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    && spc download --with-php="${PHP_VERSION}" \
                  --for-extensions="${PHP_EXTENSIONS}"
 
 RUN --mount=type=cache,target=/work/downloads \
-    spc build:php "${PHP_EXTENSIONS}" --build-cli \
+    --mount=type=secret,id=github_token \
+    export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    && spc build:php "${PHP_EXTENSIONS}" --build-cli \
     --with-config-file-path=/etc/php \
     --with-config-file-scan-dir=/etc/php/conf.d
 # ↑ §9 #7（2026-08-16 M1 收口落地）：与 frankenphp 侧统一为 /etc/php（+conf.d）。
