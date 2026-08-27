@@ -1,0 +1,71 @@
+name: "phprunner"
+
+# 持久化数据
+#volumes:
+  #redis_data:
+
+# 网络配置
+#networks:
+  #proxy:
+    #name: traefik_proxy #docker network create traefik_proxy
+    #external: true
+
+# service 公共配置
+x-service-cfg: &X_SERVICE_CFG
+  init: true
+  networks:
+    #- proxy
+    - default
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  logging:
+    options:
+      max-size: "100m"
+      max-file: 10
+  shm_size: "512m" # => /dev/shm
+  deploy:
+    resources:
+      limits:
+        cpus: "8.0"
+        memory: "16.0g"
+
+
+services:
+
+      dev:
+        #profiles: [ "web" ]
+        #container_name: "${COMPOSE_PROJECT_NAME}_web"
+        #image: "${COMPOSE_PROJECT_NAME}/runtime:0.1"
+        #hostname: "web.container"
+        #extends:
+            #service: web
+        #profiles: !override [ "dev" ]
+        container_name: "${COMPOSE_PROJECT_NAME}_dev"
+        image: "${COMPOSE_PROJECT_NAME}/test:dev_0.1"
+        hostname: "dev.container"
+        <<: *X_SERVICE_CFG
+        pull_policy: never
+        build:
+          context: .
+          dockerfile: Dockerfile
+          target: runtime
+          args:
+            USER_ID: ${DEV_USER_ID:-1000}
+            GROUP_ID: ${DEV_GROUP_ID:-1000}
+          network: host
+        environment:
+          #! [合并]
+          PS1: '\H:\w\$ '
+        #volumes:
+          #! [合并]
+          # 自定义 S6 服务
+          #- ./1.docker/3.s6-overlay-overwrite/s6-rc.d/queue/run:/etc/s6-overlay/s6-rc.d/queue/run
+          #- ./1.docker/3.s6-overlay-overwrite/s6-rc.d/task_scheduler/run:/etc/s6-overlay/s6-rc.d/task_scheduler/run
+          # 开发环境数据
+        #tmpfs:
+          #! S6
+          #- /run/s6_service_flags:size=1m
+        command: !override sleep infinity
+        #ports: !override
+            #- "127.0.0.1:38080:8080"
+        tty: true
