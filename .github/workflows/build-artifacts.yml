@@ -26,7 +26,8 @@ name: build-artifacts
 
 on:
   push:
-    branches: [dev/**, main]
+    # 2026-08-27：仅 build/* 与 main 分支构建；dev/* 等开发分支不再触发 CI
+    branches: [build/**, main]
     # 路径过滤：仅构建相关文件变更才触发重构建（文档/IDE 配置变更不陪跑）；
     # 手动兜底通道 = workflow_dispatch
     paths:
