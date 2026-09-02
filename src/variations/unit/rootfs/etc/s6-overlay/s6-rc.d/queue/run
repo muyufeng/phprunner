@@ -6,6 +6,8 @@
 # queue:work 默认参数（tries/timeout/sleep）为 §8 小项挂账——当前裸跑，
 # 用户经容器 env/compose 层注入 artisan 参数的能力待 M4 样例评估
 if [ "${QUEUE_ENABLED:-true}" != "true" ]; then
+    echo "[S6] QUEUE_ENABLED 未开启, Queue Work 进入休眠模式"
     exec s6-pause
 fi
+echo "[S6] QUEUE_ENABLED 已开启, 正在启动 Queue Work..."
 exec php "${APP_BASE_DIR:-/var/www/html}/artisan" queue:work

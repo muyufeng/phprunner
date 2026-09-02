@@ -16,7 +16,7 @@
 # ⚠️ 语义：白名单替换（仅安装），非补充——
 #   - frankenphp PHP_EXTENSIONS：传参即替换官方默认全家桶，无合并
 #     （不传参 = 官方"最受欢迎"默认集，本仓库永不依赖该模式）
-#   - spc build:php：按清单编译 + 自动补齐依赖闭包（如 pdo_mysql→pdo/mysqlnd）
+#   - spc build：按清单编译 + 自动补齐依赖闭包（如 pdo_mysql→pdo/mysqlnd）
 #   - 恒开核心（Core/date/json/pcre/spl/standard/reflection…）无条件编入，
 #     不受本清单控制（见下方"恒开核心"注释区）
 #   - 推论：漏写 = 构建期不报错、运行期缺扩展；完备性由 §5 决策 +

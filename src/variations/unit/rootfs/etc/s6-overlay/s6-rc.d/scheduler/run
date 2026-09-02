@@ -4,6 +4,8 @@
 # SCHEDULER_ENABLED=false → s6-pause 占位（服务在册但不跑调度）
 # 单实例约束（schedule:work 并发无意义）在 compose 层固化（§2/M4）
 if [ "${SCHEDULER_ENABLED:-true}" != "true" ]; then
+    echo "[S6] TASK_SCHEDULER 未开启, Task Scheduler 进入休眠模式"
     exec s6-pause
 fi
+echo "[S6] TASK_SCHEDULER 已开启, 正在启动 Task Scheduler..."
 exec php "${APP_BASE_DIR:-/var/www/html}/artisan" schedule:work

@@ -231,7 +231,7 @@ smoke:
 
 # ------------------------------------------------------------
 # 下游：三镜像装配（v0.2.0 结构：src/variations/<形态>/Dockerfile）
-# tag 规约：phprunner/<形态>:<PHP>-r<迭代号>，形态 = cli / frankenphp / unit
+# tag 规约：phprunner/<形态：cli/frankenphp/unit>:<PHP_VERSION 完整三段：8.5.9>-r<RELEASE_ITER>
 # 依赖序：unit FROM frankenphp 镜像（构建序保证）；cli 独立
 # 先决：双产物在场（成对不变量 §7.1——镜像只搬运不加工）
 # ------------------------------------------------------------
