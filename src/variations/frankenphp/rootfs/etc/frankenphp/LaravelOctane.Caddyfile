@@ -1,0 +1,209 @@
+# ============================================================
+# phprunner Laravel Octane 专用 Caddyfile（主 Caddyfile 的旁路形态）
+# 背景：`octane:frankenphp` 自带 stub Caddyfile 并自行 spawn 服务进程，
+#   完全绕过 /etc/frankenphp/Caddyfile（serversideup#633 同款问题，
+#   上游未解、文档仅警告 CADDY_* 失效）。本文件确立另一种姿势：
+#   运行时管进程、Octane 只当 worker 引导文件提供者——phprunner 全部
+#   契约保留，同时原生接受 Octane 注入的 ENV 命名。
+#
+# 用法 A（推荐·生产：运行时管进程，octane 只当 worker 文件提供者）：
+#   command: ["frankenphp","run","--config",
+#             "/etc/frankenphp/LaravelOctane.Caddyfile","--adapter","caddyfile"]
+#   前置：应用已 `php artisan octane:install`（生成 public/frankenphp-worker.php）
+#   octane:reload（走 admin API）需显式：CADDY_ADMIN=127.0.0.1:2019
+# 用法 B（octane 托管：--caddyfile 指向本文件替换 stub，octane 选项全量生效）：
+#   command: ["php","artisan","octane:frankenphp",
+#             "--caddyfile=/etc/frankenphp/LaravelOctane.Caddyfile","--port=8080"]
+#   → --workers/--max-requests/--watch/--poll/--log-level 落地为注入 env，
+#     被本文件的对应槽位消费；例外与陷阱（StartFrankenPhpCommand 实证）：
+#     · --host 不进 SERVER_NAME（默认 http://:$port 通配接口）；--port 须与
+#       CADDY_HTTP_PORT 对齐（站点地址与端口契约在配置层，非 octane 层）
+#     · --https/--http-redirect 不生效（TLS 走 SSL_MODE 契约，证书来源可控）
+#     · --admin-port 不生效（admin 走 CADDY_ADMIN，默认 off 为加固项）
+#     · octane 以 Process env 无条件覆盖容器同名变量：CADDY_GLOBAL_OPTIONS
+#       （强制 "auto_https disable_redirects" → 用法 B 下 CADDY_AUTO_HTTPS
+#       不得设 off，否则与 auto-https/off.caddyfile 的子指令重复报错）、
+#       CADDY_SERVER_EXTRA_DIRECTIVES（mercury 生成值）、LOG_LEVEL/
+#       WORKER_DIRECTIVE/WATCH_DIRECTIVES；用户注入须经 config('octane.caddy.env')
+#
+# ENV 映射（Octane 注入名 → 本文件）：
+#   APP_PUBLIC_PATH               → 直接采用（root 与 worker 文件基准）
+#   CADDY_SERVER_WORKER_DIRECTIVE → 直接采用（worker 子指令原文注入，
+#                                     如 "env OCTANE_SERVER=frankenphp"）
+#   CADDY_SERVER_WATCH_DIRECTIVES → 直接采用（octane:watch 开发流）
+#   CADDY_SERVER_EXTRA_DIRECTIVES → 直接采用（Mercure 等，站点级注入）
+#   CADDY_SERVER_LOG_LEVEL        → 直接采用（与 log-level/address 同名同默认）
+#   CADDY_SERVER_SERVER_NAME      → 不采用：源码实证其默认为 "http://:$port"
+#     （空 host 通配，不含 --host），与 CADDY_HTTP_SERVER_ADDRESS+http_port
+#     语义重复；且单地址无法表达 ssl-mode 的双站点块（full 模式 308+TLS）
+#   CADDY_SERVER_ADMIN_HOST/PORT  → 不采用：进程由运行时管理，非 octane spawn
+#   其余 SSL_MODE / TRUSTED_PROXY / HEALTHCHECK_PATH / CADDY_* / SSL_* 与
+#   主 Caddyfile 完全同契约（切片文件直接复用）。
+#
+# 与主 Caddyfile 的差异（自包含：snippet 不跨文件可见，php-app-common 等
+#   在本文件重定义；ssl-mode/ 等切片目录复用）：
+#   ① worker 恒注册（octane 语义），文件 = APP_PUBLIC_PATH/frankenphp-worker.php
+#   ② php_server 恒 octane try_files 形态 + resolve_root_symlink（public/storage）
+#   ③ 访问日志并入 authorization query 脱敏 filter（stub 同款）；站点级
+#      日志级别以 CADDY_SERVER_LOG_LEVEL 为准，LOG_OUTPUT_LEVEL 仅作用全局块
+#   ④ 不引入 worker-mode/ 分叉（classic 形态请用主 Caddyfile）
+# 机制同主 Caddyfile：{$VAR:default} 运行期展开、零文本渲染（§8 机制①）
+# ============================================================
+
+{
+	# $CADDY_ADMIN: "127.0.0.1:2019"
+	admin {$CADDY_ADMIN:off}
+
+	import auto-https/{$CADDY_AUTO_HTTPS:off}.caddyfile
+
+	http_port {$CADDY_HTTP_PORT:8080}
+	https_port {$CADDY_HTTPS_PORT:8443}
+
+	skip_install_trust
+
+	import log-level/global/{$LOG_OUTPUT_LEVEL:warn}.caddyfile
+
+	frankenphp {
+		{$FRANKENPHP_CONFIG}
+		# octane worker 恒注册（对应主 Caddyfile 的 worker-mode/global 分叉）
+		worker {
+			file {$APP_PUBLIC_PATH:/var/www/html/public}/frankenphp-worker.php
+			{$CADDY_SERVER_WORKER_DIRECTIVE}
+			{$CADDY_SERVER_WATCH_DIRECTIVES}
+		}
+	}
+
+	# 反代/CDN 后取真实客户端 IP（契约同主 Caddyfile）
+	import trusted-proxy/{$TRUSTED_PROXY:local}.caddyfile
+
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+########################################################
+# 片段（自包含重定义，名字与 ssl-mode 切片的 import 对齐）
+########################################################
+
+(tls-off) {
+	tls {$SSL_CERTIFICATE_FILE:/etc/ssl/private/web.crt} {$SSL_PRIVATE_KEY_FILE:/etc/ssl/private/web.key}
+}
+(tls-on) {
+	# auto_https≠off 时无需 tls 指令
+}
+
+# octane 形态的应用公共逻辑（ssl-mode 各切片复用）
+(php-app-common) {
+	root * {$APP_PUBLIC_PATH:/var/www/html/public}
+
+	encode zstd br gzip
+
+	# level 兼容 octane 注入名；format filter 脱敏 authorization query
+	# （octane stub 同款，防 Mercure 授权泄漏进日志）
+	log {
+		output {$CADDY_LOG_OUTPUT:stdout}
+		level {$CADDY_SERVER_LOG_LEVEL:WARN}
+		format filter {
+			wrap {$CADDY_LOG_FORMAT:console}
+			fields {
+				uri query {
+					replace authorization REDACTED
+				}
+			}
+		}
+	}
+
+	# 三路健康契约之②：容器自带 /healthcheck 兜底路由（契约同主 Caddyfile）
+	@builtin-healthcheck path /healthcheck
+	respond @builtin-healthcheck "OK" 200
+	log_skip @builtin-healthcheck
+
+	# 三路健康契约之③：应用深检路由
+	@app-healthcheck path {$HEALTHCHECK_PATH:/healthcheck}
+	log_skip @app-healthcheck
+
+	# /index.php/... → /...（SEO 去重）
+	@indexphp path_regexp indexphp ^/index\.php(/.+)$
+	redir @indexphp {re.indexphp.1} 301
+
+	# octane worker 前端控制器（stub 同款；resolve_root_symlink 支撑
+	# public/storage 符号链接）
+	php_server {
+		{$CADDY_PHP_SERVER_OPTIONS}
+		index frankenphp-worker.php
+		try_files {path} frankenphp-worker.php
+		resolve_root_symlink
+	}
+
+	import performance
+	import security
+
+	{$CADDY_SERVER_EXTRA_DIRECTIVES}
+}
+
+(performance) {
+	# 静态资源长缓存（内容寻址文件名的部署假设）
+	@static {
+		path *.css *.css.map *.js *.js.map *.jpg *.jpeg *.png *.gif *.ico *.cur *.heic *.webp *.tif *.tiff *.mp3 *.m4a *.aac *.ogg *.midi *.mid *.wav *.mp4 *.mov *.webm *.mpeg *.mpg *.avi *.ogv *.flv *.wmv *.htc *.gz *.svg *.svgz *.woff2 *.woff
+	}
+	header @static Cache-Control "public, immutable, stale-while-revalidate, max-age=31536000"
+
+	# 字体跨域（缓存头继承 @static）
+	@fonts {
+		path *.svg *.svgz *.ttf *.ttc *.otf *.eot *.woff *.woff2
+	}
+	header @fonts Access-Control-Allow-Origin "*"
+
+	# 短缓存静态
+	@staticshort {
+		path *.json *.xml *.rss
+	}
+	header @staticshort Cache-Control "no-cache, max-age=3600"
+
+	# 噪音资源不记日志
+	@meta path /favicon.ico /robots.txt
+	log_skip @meta
+}
+
+(security) {
+	# Laravel storage 目录禁执行 PHP（防上传恶意 PHP；Livewire
+	# GHSA-29cq-5w36-x7w3 类防线）——octane 的 resolve_root_symlink
+	# 使 storage 可达，本防线在 octane 形态下更重要
+	@storage-php path_regexp ^/storage/.*\.php$
+	respond @storage-php 403
+
+	# 敏感后缀/点文件拒绝（.well-known 例外：RFC 8615 ACME 挑战）
+	@rejected {
+		path *.bak *.conf *.config *.dist *.inc *.ini *.log *.sh *.sql *.swp *.swo *~ */.*
+		not path /.well-known/*
+	}
+	respond @rejected 403
+
+	# 安全响应头（OWASP Secure Headers）
+	header {
+		defer
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		-X-Powered-By
+	}
+}
+
+(security-https) {
+	header {
+		defer
+		Strict-Transport-Security "max-age=31531500; includeSubDomains"
+	}
+}
+
+########################################################
+# 动态装配（ENV 选片段，契约同主 Caddyfile）
+########################################################
+
+# 顶层逃逸门（octane stub 同名占位，默认空；octane 不注入此变量，
+# 容器 ENV 全程可控——与被 octane 覆盖的 CADDY_GLOBAL_OPTIONS 不同）
+{$CADDY_EXTRA_CONFIG}
+
+import ssl-mode/{$SSL_MODE:off}.caddyfile
+
+# 用户扩展位：挂载任意 *.caddyfile 即生效
+import caddyfile.d/*.caddyfile

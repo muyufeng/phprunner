@@ -1,0 +1,166 @@
+
+########################################################
+# Global Caddy configuration
+# Laravel Octane + serversideup 的 Caddyfile
+# see https://serversideup.net/open-source/docker-php/docs/framework-guides/laravel/octane
+# from vendor/laravel/octane/src/Commands/stubs/Caddyfile
+# from https://github.com/serversideup/docker-php/blob/main/src/variations/frankenphp/etc/frankenphp/Caddyfile
+########################################################
+
+# php /var/www/html/artisan octane:frankenphp --caddyfile=/var/www/html/Caddyfile --port=8080 --workers=2 --max-requests=500 --watch --poll
+
+########################################################
+# 片段定义 (Snippets) - 必须在最外层
+########################################################
+#! [from frankenphp/Caddyfile]
+# 静态资源缓存策略
+(performance) {
+    # Favicon/robots: skip noisy logs
+    @meta path /favicon.ico /robots.txt
+    log_skip @meta
+
+    # Static assets (long cache)
+    @static {
+        path *.css *.css.map *.js *.js.map *.jpg *.jpeg *.png *.gif *.ico *.cur *.heic *.webp *.tif *.tiff *.mp3 *.m4a *.aac *.ogg *.midi *.mid *.wav *.mp4 *.mov *.webm *.mpeg *.mpg *.avi *.ogv *.flv *.wmv *.htc *.gz *.svg *.svgz *.woff2 *.woff
+    }
+    header @static Cache-Control "public, immutable, stale-while-revalidate, max-age=31536000"
+
+    # Fonts/SVG: allow cross-origin usage (cache header inherited from @static)
+    @fonts {
+        path *.svg *.svgz *.ttf *.ttc *.otf *.eot *.woff *.woff2
+   }
+    header @fonts Access-Control-Allow-Origin "*"
+
+    # Short-lived static
+    @staticshort {
+        path *.json *.xml *.rss
+    }
+    header @staticshort Cache-Control "no-cache, max-age=3600"
+}
+
+# 安全配置，拦截非法请求
+(security) {
+
+    @storage-php path_regexp ^/storage/.*\.php$
+    respond @storage-php 403
+
+    # Block access to files that may expose sensitive information
+    @rejected {
+        path *.bak *.conf *.config *.dist *.inc *.ini *.log *.sh *.sql *.swp *.swo *~ */.*
+        # EXCEPTION: /.well-known/* is allowed per RFC 8615 for ACME challenges
+        # https://www.rfc-editor.org/rfc/rfc8615
+        not path /.well-known/*
+    }
+    respond @rejected 403
+
+    # Security Headers
+    # https://owasp.org/www-project-secure-headers/
+    header {
+        defer
+        # Prevent clickjacking attacks by disabling iframe embedding
+        X-Frame-Options "SAMEORIGIN"
+        # Prevent MIME type sniffing attacks
+        X-Content-Type-Options "nosniff"
+        # Control referrer information sent with requests
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server identification headers
+        -Server
+        -X-Powered-By
+    }
+}
+#! [from frankenphp/Caddyfile]
+
+{
+    #! [from frankenphp/Caddyfile]
+    # auto_https off 强制关闭 https
+    # 不要尝试将自签名根证书（Root CA）自动安装到系统的受信任证书库中
+    skip_install_trust
+    #! [from frankenphp/Caddyfile]
+
+	{$CADDY_GLOBAL_OPTIONS}
+
+    #! [see https://frankenphp.dev/docs/metrics/]
+    # 开启指标导出 (导出到 Admin API)
+    metrics
+    #! [from frankenphp/Caddyfile]
+
+	admin {$CADDY_SERVER_ADMIN_HOST}:{$CADDY_SERVER_ADMIN_PORT}
+
+	frankenphp {
+		worker {
+			file "{$APP_PUBLIC_PATH}/frankenphp-worker.php"
+			{$CADDY_SERVER_WORKER_DIRECTIVE}
+			{$CADDY_SERVER_WATCH_DIRECTIVES}
+		}
+	}
+
+   #! [from frankenphp/Caddyfile]
+   # 服务器处于 反向代理、负载均衡器或 CDN（如 Cloudflare） 后方时,从哪些特定的 HTTP 请求头中获取“真实的客户端 IP 地址”
+   # https://www.cloudflare.com/zh-cn/ips/
+   servers {
+        # 内网、Docker 和回环地址
+        trusted_proxies static 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.1/8 ::1
+
+        client_ip_headers X-Forwarded-For
+   }
+   #! [from frankenphp/Caddyfile]
+}
+
+{$CADDY_EXTRA_CONFIG}
+
+{$CADDY_SERVER_SERVER_NAME} {
+	log {
+		level {$CADDY_SERVER_LOG_LEVEL}
+
+		# Redact the authorization query parameter that can be set by Mercure...
+		format filter {
+			wrap {$CADDY_SERVER_LOGGER}
+			fields {
+				uri query {
+					replace authorization REDACTED
+				}
+			}
+		}
+	}
+
+	route {
+		root * "{$APP_PUBLIC_PATH}"
+        encode zstd br gzip
+
+		# Mercure configuration is injected here...
+		{$CADDY_SERVER_EXTRA_DIRECTIVES}
+
+
+        #! [from frankenphp/Caddyfile]
+        # 安全配置，拦截非法请求
+        import security
+        # 性能配置，预设静态资源缓存头
+        import performance
+        # 静态文件服务
+        # file_server
+        #! OR file_server off
+
+        # Define the Caddy healthcheck endpoint
+        @caddy-healthcheck {
+            path /healthcheck
+        }
+        # 直接返回,不记录日志
+        respond @caddy-healthcheck "OK" 200
+        log_skip @caddy-healthcheck
+
+        # Define the custom healthcheck endpoint
+        @healthcheckpath {
+            path {$HEALTHCHECK_PATH:/healthcheck}
+        }
+        # 交给程序处理,不记录日志
+        log_skip @healthcheckpath
+        #! [from frankenphp/Caddyfile]
+
+        php_server {
+			index frankenphp-worker.php
+			try_files {path} frankenphp-worker.php
+			# Required for the public/storage/ directory...
+			resolve_root_symlink
+		}
+	}
+}
