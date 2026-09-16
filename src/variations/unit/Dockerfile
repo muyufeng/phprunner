@@ -1,20 +1,20 @@
 # syntax=docker/dockerfile:1
 # ============================================================
 # phprunner unit 形态（派生：frankenphp 的变体 + php-cli 引入）
-# 结构：docs/结构设计-v0.2.0.md（临时设计稿）——方案A FROM 继承：
+# 方案A FROM 继承：
 #   ENV/CMD/HEALTHCHECK/USER/WORKDIR/EXPOSE 与全部层继承自 frankenphp
 #   镜像，本文件只写差异；"跨形态逐字节同源"由层继承成为物理事实
 # 增量：php 真 NTS 二进制（同位覆盖继承的垫片）+ s6 overlay + 服务树
 #   + /run chown（非 root s6）+ FORM/S6/开关 ENV + PID1 换 /init
 # ============================================================
-ARG PHP_VERSION=8.5.9
+ARG PHP_VERSION=8.5.10
 ARG RELEASE_ITER=1
 FROM phprunner/frankenphp:${PHP_VERSION}-r${RELEASE_ITER}
 
 # FROM 后需重新声明方可使用（Dockerfile ARG 作用域规则）
 ARG PHP_VERSION
 ARG RELEASE_ITER
-ARG S6_OVERLAY_VERSION=v3.2.1.0
+ARG S6_OVERLAY_VERSION=v3.2.3.2
 
 # 继承镜像默认 USER www-data——以下构建步骤（apt / tar 解包 / chown）
 # 需 root 权限，临时提升；构建尾部恢复非特权默认

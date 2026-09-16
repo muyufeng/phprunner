@@ -1,9 +1,8 @@
 #!/bin/sh
 # ============================================================
 # 10 运行时配置装配
-# 文档：docs/project-structure.md §1（10-assemble-config.sh）
 #
-# 零渲染结论（§8 ENV 调研机制①，2026-08-16）：ini 占位符
+# 零渲染结论（2026-08-16）：ini 占位符
 #   ${PHP_XXX} 由 PHP 解析期展开、Caddyfile 占位符 {$VAR:default}
 #   由 Caddy 运行期展开——本脚本无任何文本替换职责。
 # 唯一职责：zzz-debug.ini 按 LOG_OUTPUT_LEVEL 生成/清除。

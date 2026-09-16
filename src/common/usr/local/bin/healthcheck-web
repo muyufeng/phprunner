@@ -1,7 +1,6 @@
 #!/bin/sh
 # ============================================================
 # healthcheck-web：web/runtime 形态容器级探针（三路契约之①）
-# 文档：docs/static-php-runtime-discussion.md §8（三路制拍板）
 #
 # 先打 HTTP；SSL_MODE=full 时 HTTP 只回 308 → 回退 https（-k：
 # 内网证书自签/域名不匹配常态）——薄方案，不做上游的 localhost

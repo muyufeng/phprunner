@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 # ============================================================
 # phprunner cli 形态（根形态①：NTS php 单进程直跑，无 web 层 / 无 s6）
-# 结构：docs/结构设计-v0.2.0.md（临时设计稿）
 # 装配：src/common（全形态）+ php(NTS) 二进制
 # 部署形态：compose 用 command: 覆盖为 queue:work / schedule:work
 #   （扩缩不对称：queue ×N、scheduler 恰 1 份）
@@ -13,7 +12,7 @@ ARG BASE_IMAGE=debian:trixie-slim
 FROM ${BASE_IMAGE}
 
 ARG APT_MIRROR=mirrors.ustc.edu.cn
-ARG PHP_VERSION=8.5.9
+ARG PHP_VERSION=8.5.10
 ARG RELEASE_ITER=1
 
 RUN if [ -n "${APT_MIRROR}" ]; then \

@@ -1,0 +1,28 @@
+# ============================================================
+# phprunner 可选依赖库清单（单一事实源②b，与 build/extensions.txt 同族）
+#
+# 用法：根 Makefile 剥离本文件注释/空行 → 逗号列表 → 喂给两个构建器：
+#   - php-cli：spc download / spc build 的 --with-libs
+#   - frankenphp：官方 static-builder 的 PHP_EXTENSION_LIBS（内部即 spc --with-libs）
+#
+# ⚠️ 语义：--with-libs 只收"扩展依赖闭包之外"的额外库——spc 遵循最小依赖
+#   原则，扩展的可选特性（如 gd 的 webp/avif 字体）默认不编入；必选闭包
+#   （如 gd→libpng/zlib、mbstring→oniguruma）自动补齐，无须也不应在此登记。
+#
+# 机器行规则：与 extensions.txt 完全一致——行首小写字母开头，可含数字/
+#             下划线/连字符；# 开头为注释；空行忽略。
+#             消费方正则：^[a-z0-9_-]+$（根 Makefile 的 LIB_COMMA）
+#
+# ⚠️ 未验证（沿用 php-cli.Dockerfile 的 --prefer-pre-built 注记）：预编译
+#   依赖包对 glibc 目标的覆盖情况——未命中即退化为本地编译，无害但更慢
+# ============================================================
+
+# --- gd 可选特性（2026-09-16，配合 extensions.txt 的 gd）---
+#   freetype：字体渲染（imagettftext / imagettfbbox）
+#   libjpeg ：JPEG 编解码
+#   libwebp ：WebP 编解码
+#   libavif ：AVIF 编解码
+freetype
+libjpeg
+libwebp
+libavif

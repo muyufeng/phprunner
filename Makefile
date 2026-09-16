@@ -1,7 +1,5 @@
 # ============================================================
-# phprunner 项目编排唯一入口
-# 文档：docs/project-structure.md §1（根 Makefile——跨 build/smoke/images
-#       三子系统，故放仓库根）
+# phprunner 项目编排唯一入口（跨 build/smoke/images 三子系统，故放仓库根）
 #
 # 目标：
 #   make binaries   双二进制成对产出 → build/artifacts/（M1）
@@ -13,9 +11,10 @@
 #
 # 原则：
 #   - 幂等可重复；失败即停（.ONESHELL + set -euo pipefail）
-#   - 单一事实源：一切版本来自 build/versions.env，扩展清单来自
-#     build/extensions.txt；本文件与 images/ 层禁止硬编码版本/扩展名
-#   - 成对不变量（讨论文档 §7.1）：frankenphp 与 php-cli 必须同批产出，
+#   - 单一事实源：一切版本来自 build/versions.env，扩展/库清单来自
+#     build/extensions.txt + build/libs.txt；本文件与 images/ 层禁止
+#     硬编码版本/扩展名/库名
+#   - 成对不变量：frankenphp 与 php-cli 必须同批产出，
 #     binarah 目标收尾统一校验
 #   - 交互调试不经此处：./dev builder
 # ============================================================
@@ -42,6 +41,10 @@ export PHP_VERSION FRANKENPHP_VERSION SPC_VERSION STATIC_BUILDER_IMAGE \
 # 字符类含连字符（password-argon2）——与 smoke/lib.sh 的 ext_list 保持同一正则
 EXT_COMMA := $(shell grep -E '^[a-z0-9_-]+$$' $(BUILD_DIR)/extensions.txt | paste -sd, -)
 
+# ---- 单一事实源②b：可选依赖库清单 → 逗号列表（--with-libs 域，仅闭包外）----
+# 机器行规则与 extensions.txt 一致（含连字符的库名同字符类）
+LIB_COMMA := $(shell grep -E '^[a-z0-9_-]+$$' $(BUILD_DIR)/libs.txt | paste -sd, -)
+
 # ---- CI 缓存注入口：buildx 外部缓存参数（本地默认空 = 仅本机层缓存）----
 # CI 以环境变量注入 BUILDX_CACHE_ARGS="--cache-from type=gha,… --cache-to type=gha,…,mode=max"
 # （配套 docker/setup-buildx-action；docker driver 不支持 gha 后端）；本地构建不受影响
@@ -51,7 +54,7 @@ BUILDX_CACHE_ARGS ?=
 .PHONY: help binaries verify frankenphp php-cli smoke images clean
 
 help:
-	@echo "phprunner 编排入口（结构：docs/project-structure.md）"
+	@echo "phprunner 编排入口"
 	@echo "  make binaries   双二进制成对产出 → $(ARTIFACTS)/"
 	@echo "  make verify     产物功能核验（版本 + 扩展探测）"
 	@echo "  make smoke      冒烟总入口（smoke/run-all.sh）"
@@ -59,6 +62,7 @@ help:
 	@echo "  make clean      清 $(ARTIFACTS)/"
 	@echo "自检：PHP=$(PHP_VERSION) FRANKENPHP=$(FRANKENPHP_VERSION) ARCH=$(TARGET_ARCH)"
 	@echo "      EXTENSIONS=$(EXT_COMMA)"
+	@echo "      LIBS=$(LIB_COMMA)"
 	@if [[ -f $(BUILD_DIR)/secrets.env ]]; then \
 		echo "      GITHUB_TOKEN=已配置（build/secrets.env）"; \
 	else \
@@ -78,7 +82,7 @@ binaries: frankenphp php-cli
 	test -x "$(ARTIFACTS)/php-cli-linux-$(TARGET_ARCH)" \
 	  || { echo "❌ 成对校验失败：php-cli 产物缺失"; exit 1; }
 	# 产物清单：固定文件名 + 本清单 = 完整可追溯（版本/时间/git/sha256）。
-	# 文件名本身不带版本是有意设计——槽位名由 versions.env 定义其内容（§4 规约）
+	# 文件名本身不带版本是有意设计——槽位名由 versions.env 定义其内容
 	{ \
 	  echo "# phprunner 构建清单（自动生成，gitignore 内 artifacts 随产物存续）"; \
 	  echo "build_time:  $$(date -u '+%F %T UTC')"; \
@@ -88,6 +92,7 @@ binaries: frankenphp php-cli
 	  echo "arch:        $(TARGET_ARCH)"; \
 	  echo "git_commit:  $$(git -C $(ROOT) rev-parse --short HEAD 2>/dev/null || echo n/a)"; \
 	  echo "extensions:  $(EXT_COMMA)"; \
+	  echo "libs:        $(LIB_COMMA)"; \
 	  echo; \
 	  cd "$(ARTIFACTS)" && sha256sum frankenphp-linux-$(TARGET_ARCH) php-cli-linux-$(TARGET_ARCH); \
 	} > "$(ARTIFACTS)/BUILD-INFO"
@@ -128,6 +133,7 @@ frankenphp:
 		--build-arg FRANKENPHP_VERSION='$(FRANKENPHP_VERSION)' \
 		--build-arg PHP_VERSION='$(PHP_VERSION)' \
 		--build-arg PHP_EXTENSIONS='$(EXT_COMMA)' \
+		--build-arg PHP_EXTENSION_LIBS='$(LIB_COMMA)' \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		-o 'type=local,dest=$(ARTIFACTS)/.dist' \
 		$(BUILD_DIR)
@@ -169,6 +175,7 @@ php-cli:
 		--build-arg SPC_VERSION='$(SPC_VERSION)' \
 		--build-arg PHP_VERSION='$(PHP_VERSION)' \
 		--build-arg PHP_EXTENSIONS='$(EXT_COMMA)' \
+		--build-arg PHP_EXTENSION_LIBS='$(LIB_COMMA)' \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		-o 'type=local,dest=$(ARTIFACTS)/.dist-cli' \
 		$(BUILD_DIR)
@@ -231,9 +238,9 @@ smoke:
 
 # ------------------------------------------------------------
 # 下游：三镜像装配（v0.2.0 结构：src/variations/<形态>/Dockerfile）
-# tag 规约：phprunner/<形态：cli/frankenphp/unit>:<PHP_VERSION 完整三段：8.5.9>-r<RELEASE_ITER>
+# tag 规约：phprunner/<形态：cli/frankenphp/unit>:<PHP_VERSION 完整三段：8.5.10>-r<RELEASE_ITER>
 # 依赖序：unit FROM frankenphp 镜像（构建序保证）；cli 独立
-# 先决：双产物在场（成对不变量 §7.1——镜像只搬运不加工）
+# 先决：双产物在场（成对不变量——镜像只搬运不加工）
 # ------------------------------------------------------------
 images: $(ARTIFACTS)/frankenphp-linux-$(TARGET_ARCH) $(ARTIFACTS)/php-cli-linux-$(TARGET_ARCH)
 	@set -euo pipefail

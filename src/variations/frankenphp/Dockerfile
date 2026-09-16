@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 # ============================================================
 # phprunner frankenphp 形态（根形态②：frankenphp ZTS 单进程直跑，无 s6）
-# 结构：docs/结构设计-v0.2.0.md（临时设计稿）
 # 装配：src/common（全形态）+ 本形态自有资产（etc/frankenphp + php 垫片）
 #       + frankenphp 二进制
 # 本形态同时是 unit 形态的继承基底（unit = 本镜像 + php-cli 引入）
@@ -12,7 +11,7 @@ ARG BASE_IMAGE=debian:trixie-slim
 FROM ${BASE_IMAGE}
 
 ARG APT_MIRROR=mirrors.ustc.edu.cn
-ARG PHP_VERSION=8.5.9
+ARG PHP_VERSION=8.5.10
 ARG RELEASE_ITER=1
 
 # 公共基础包：ca-certificates（静态 PHP 的 CA 链）/ tzdata / curl
@@ -32,7 +31,7 @@ RUN if [ -n "${APT_MIRROR}" ]; then \
 COPY --chmod=755 src/common/ /
 COPY --chmod=755 src/variations/frankenphp/rootfs/ /
 
-# ---- 二进制（§6 取舍：单 arch x86_64 起步）----
+# ---- 二进制（单 arch x86_64 起步）----
 COPY --chmod=755 build/artifacts/frankenphp-linux-x86_64 /usr/local/bin/frankenphp
 
 # ---- 版本标记 + 目录/属主（构建期权限模型；含 zzz-debug.ini 运行时写入位）----

@@ -1,9 +1,7 @@
 # ============================================================
 # phprunner 主 Caddyfile（web / runtime 形态共用）
-# 文档：docs/project-structure.md §1（control/frankenphp/）
-#       docs/static-php-runtime-discussion.md §6 #4（模式来源）
 #
-# 机制（§8 ENV 调研机制①）：{$VAR:default} 为 Caddy 原生运行期展开，
+# 机制：{$VAR:default} 为 Caddy 原生运行期展开，
 #   零文本渲染；片段选择也原生（import ssl-mode/{$SSL_MODE:off}.caddyfile）。
 #   相对 import 以本文件所在目录（镜像内 /etc/frankenphp）为基准。
 #

@@ -1,10 +1,8 @@
 # ============================================================
 # phprunner 冻结扩展清单（单一事实源②）
-# 文档：docs/static-php-runtime-discussion.md §5（v2.1 增补 phar）
-#       docs/project-structure.md §1（build/extensions.txt）
 #
 # 用法：根 Makefile 剥离本文件注释/空行 → 逗号列表 → 喂给两个构建器：
-#   - php-cli：spc（gnu.2.17 半静态，NTS）
+#   - php-cli：spc（glibc 半静态，NTS）
 #   - frankenphp：官方 static-builder 的 PHP_EXTENSIONS（ZTS）
 #
 # 机器行规则：每行一个扩展名（构建器可选项），行首小写字母开头、
@@ -19,7 +17,7 @@
 #   - spc build：按清单编译 + 自动补齐依赖闭包（如 pdo_mysql→pdo/mysqlnd）
 #   - 恒开核心（Core/date/json/pcre/spl/standard/reflection…）无条件编入，
 #     不受本清单控制（见下方"恒开核心"注释区）
-#   - 推论：漏写 = 构建期不报错、运行期缺扩展；完备性由 §5 决策 +
+#   - 推论：漏写 = 构建期不报错、运行期缺扩展；完备性由本清单决策 +
 #     01 冒烟 subset 对账双重把关
 #
 # 恒开核心（PHP 默认编入、无须选择；01 冒烟 php -m 对账时额外期待出现，
@@ -31,7 +29,7 @@
 #   （暂无；形如：phpredis ↔ redis）
 # ============================================================
 
-# --- Laravel 硬性 ext-*（§5）---
+# --- Laravel 硬性 ext-* ---
 ctype
 curl
 dom
@@ -47,7 +45,7 @@ simplexml
 xmlreader
 xmlwriter
 
-# --- 驱动 / 队列 / 缓存 / 杂项（§5）---
+# --- 驱动 / 队列 / 缓存 / 杂项 ---
 pdo_mysql
 pdo_sqlite
 sqlite3
@@ -62,7 +60,11 @@ zip
 #     Swoole 生态出身，ZTS 兼容性验证充分）---
 xlswriter
 
-# --- 对照官方 defaultExtensions 增补（2026-08-16，A+B 层，讨论文档 §5）---
+# --- 图片处理（2026-09-16 加入）：gd 必选闭包（libpng/zlib）自动补齐，
+#     可选特性库在 build/libs.txt（freetype/libjpeg/libwebp/libavif）---
+gd
+
+# --- 对照官方 defaultExtensions 增补（2026-08-16，A+B 层）---
 # A 层（缺失即坑）：readline（artisan tinker 交互基础）
 # B 层（Laravel 原生路径，缺失=报错或降级）：password-argon2（hashing 的
 #   argon2id 驱动）、sodium（现代加密）、iconv（生态高频软依赖）、
@@ -74,5 +76,5 @@ sodium
 iconv
 mbregex
 
-# --- 工具链：composer.phar 运行前提（§5 v2.1 / §7.2）---
+# --- 工具链：composer.phar 运行前提 ---
 phar

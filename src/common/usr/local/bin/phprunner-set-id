@@ -2,7 +2,7 @@
 # ============================================================
 # phprunner-set-id [username] [uid]:[gid]
 # 构建期工具：改容器内指定用户/组的 uid/gid——dev bind mount 对齐
-# 宿主 uid 的官方姿势（权限三解法之一；讨论文档 §8 权限拍板）。
+# 宿主 uid 的官方姿势（权限三解法之一）。
 #
 # 精髓来源：serversideup docker-php-serversideup-set-id 五条精髓
 # （幂等短路 / 冲突挪位 / 改ID≠改文件 / 防呆三连 / 仅构建期多阶段用法），

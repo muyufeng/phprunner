@@ -1,7 +1,6 @@
 #!/bin/sh
 # ============================================================
 # 00 启动横幅 + 性能状态检测建议
-# 文档：docs/project-structure.md §1（00-container-info.sh）
 # 拍板（2026-08-16）：PHP_OPCACHE_ENABLE 默认 0，本脚本的性能
 #   检测建议即其补偿机制（模式参考 serversideup 0-container-info.sh，
 #   GPL-3.0 边界：只学模式，自研实现）。
@@ -21,7 +20,7 @@ if [ "$SHOW_WELCOME_MESSAGE" = "false" ] || [ "$DISABLE_DEFAULT_CONFIG" = "true"
     return 0 2>/dev/null || exit 0
 fi
 
-# PHP_BIN 按形态解析（§7.2）：有 php 用 php——cli/runtime 为真二进制，
+# PHP_BIN 按形态解析：有 php 用 php——cli/runtime 为真二进制，
 # web 为 /usr/local/bin/php 垫片（frankenphp php-cli 转发 + 剥 -d，官方
 # known-issues 同款；垫片仅一次性脚本用，常驻进程走 cli 形态；
 # 一次性探测自然结束，不涉信号禁区——M2-07 实证 exit 透传）。
@@ -77,5 +76,5 @@ echo "------------------------------------------------------------"
 
 # opcache=0 补偿建议（拍板机制核心行）
 if [ -n "$PHP_BIN" ] && [ "$OPCACHE_STATUS" != "1" ]; then
-    echo "👉 [NOTICE]: 生产环境建议开启 OPcache：设 PHP_OPCACHE_ENABLE=1（classic 模式性能主要杠杆，§9 #3 已实证原生构建可用）"
+    echo "👉 [NOTICE]: 生产环境建议开启 OPcache：设 PHP_OPCACHE_ENABLE=1（classic 模式性能主要杠杆，已实证原生构建可用）"
 fi

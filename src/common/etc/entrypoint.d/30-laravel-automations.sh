@@ -1,14 +1,12 @@
 #!/bin/sh
 # ============================================================
 # 30 Laravel 启动自动化
-# 文档：docs/project-structure.md §1（30-laravel-automations.sh）
-#       docs/static-php-runtime-discussion.md §6 #7（模式来源）
 #
 # 职责：storage:link / migrate（等 DB + 可选 --isolated 互斥）/ optimize
 #   全 ENV 开关控制（四层命名空间之 AUTORUN_* 层）。
 # 目标版本：Laravel 13（项目 V13 拍板）——不做旧版本兼容矩阵，
 #   optimize --except / migrate --isolated 均按 13 线能力直用。
-# PHP_BIN 按形态解析（§7.2）：有 php 用 php——cli/runtime 真二进制，
+# PHP_BIN 按形态解析：有 php 用 php——cli/runtime 真二进制，
 #   web 为 /usr/local/bin/php 垫片（frankenphp php-cli 转发，官方
 #   known-issues 同款；一次性脚本语义已实证）。
 # 接口最小面：缓存族只留 OPTIMIZE 聚合开关（config/route/view/event

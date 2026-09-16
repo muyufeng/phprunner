@@ -47,7 +47,7 @@
 #   ③ 访问日志并入 authorization query 脱敏 filter（stub 同款）；站点级
 #      日志级别以 CADDY_SERVER_LOG_LEVEL 为准，LOG_OUTPUT_LEVEL 仅作用全局块
 #   ④ 不引入 worker-mode/ 分叉（classic 形态请用主 Caddyfile）
-# 机制同主 Caddyfile：{$VAR:default} 运行期展开、零文本渲染（§8 机制①）
+# 机制同主 Caddyfile：{$VAR:default} 运行期展开、零文本渲染
 # ============================================================
 
 {
