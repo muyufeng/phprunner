@@ -79,7 +79,9 @@ FROM spc-env AS build
 ARG PHP_VERSION=8.5.10
 ARG PHP_EXTENSIONS="bcmath"
 # 可选依赖库（扩展依赖闭包之外，如 gd 的 freetype/libjpeg/libwebp/libavif）：Makefile
-# 从 libs.txt 注入；空值条件拼参——spc 对 --with-libs="" 的行为未验证，不赌
+# 从 libs.txt 注入；空值条件拼参——spc 对空串参数的行为未验证，不赌
+# ⚠️ 两阶段参数面不同名（2026-09-16 实测）：download 只收 --for-libs，--with-libs 是
+#    build 的选项；download 侧误用 --with-libs 会以 "option does not exist" 立即退出 1
 ARG PHP_EXTENSION_LIBS=""
 # token 走 --secret 而非 ARG/build-arg（同 frankenphp 线）：build-arg 值参与缓存键，
 # CI 每轮轮换会让层缓存永远 miss；secret 不进缓存键、不落 history。
@@ -106,10 +108,10 @@ ENV SPC_LIBC=glibc
 RUN --mount=type=cache,target=/work/downloads \
     --mount=type=secret,id=github_token \
     export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
-    && case "${PHP_EXTENSION_LIBS:-}" in '') LIBS_ARGS='' ;; *) LIBS_ARGS="--with-libs=${PHP_EXTENSION_LIBS}" ;; esac \
+    && case "${PHP_EXTENSION_LIBS:-}" in '') DL_LIBS_ARGS='' ;; *) DL_LIBS_ARGS="--for-libs=${PHP_EXTENSION_LIBS}" ;; esac \
     && spc download --with-php="${PHP_VERSION}" \
                  --for-extensions="${PHP_EXTENSIONS}" \
-                 --prefer-pre-built ${LIBS_ARGS}
+                 --prefer-pre-built ${DL_LIBS_ARGS}
 
 RUN --mount=type=cache,target=/work/downloads \
     --mount=type=secret,id=github_token \

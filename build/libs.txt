@@ -2,10 +2,12 @@
 # phprunner 可选依赖库清单（单一事实源②b，与 build/extensions.txt 同族）
 #
 # 用法：根 Makefile 剥离本文件注释/空行 → 逗号列表 → 喂给两个构建器：
-#   - php-cli：spc download / spc build 的 --with-libs
+#   - php-cli：spc download 的 --for-libs + spc build 的 --with-libs
+#     ⚠️ 两阶段不同名（2026-09-16 实测）：download 侧误用 --with-libs 会
+#     以 "option does not exist" 立即退出 1；
 #   - frankenphp：官方 static-builder 的 PHP_EXTENSION_LIBS（内部即 spc --with-libs）
 #
-# ⚠️ 语义：--with-libs 只收"扩展依赖闭包之外"的额外库——spc 遵循最小依赖
+# ⚠️ 语义：这份清单只收"扩展依赖闭包之外"的额外库——spc 遵循最小依赖
 #   原则，扩展的可选特性（如 gd 的 webp/avif 字体）默认不编入；必选闭包
 #   （如 gd→libpng/zlib、mbstring→oniguruma）自动补齐，无须也不应在此登记。
 #
