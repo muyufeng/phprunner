@@ -7,8 +7,9 @@
           <value>
             <TabSessionState>
               <option name="provider" value="claude" />
-              <option name="cwd" value="E:\PhpstormProjects\phprunner" />
-              <option name="model" value="claude-sonnet-5" />
+              <option name="sessionId" value="274d8b93-d633-4c51-9cd1-ae862349542c" />
+              <option name="cwd" value="$PROJECT_DIR$" />
+              <option name="model" value="claude-sonnet-5[1m]" />
               <option name="permissionMode" value="default" />
             </TabSessionState>
           </value>

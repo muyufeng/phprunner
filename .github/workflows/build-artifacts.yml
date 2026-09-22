@@ -61,9 +61,9 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       # -j2：frankenphp / php-cli 并行；APT_MIRROR=：CI 海外 runner 用官方源
-      #- name: 构建双二进制（make -j2 binaries）
-      - name: 构建双二进制（串行）
-        run: make -j1 binaries APT_MIRROR=
+      - name: 构建双二进制（make -j2 binaries）
+      #- name: 构建双二进制（串行）
+        run: make -j2 binaries APT_MIRROR=
 
       # 成对校验（binaries 目标内已做，此处再留一道显式断言供 CI 日志审计）
       - name: 成对产物核验
