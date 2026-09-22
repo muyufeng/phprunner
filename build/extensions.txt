@@ -62,7 +62,7 @@ xlswriter
 
 # --- 图片处理（2026-09-16 加入）：gd 必选闭包（libpng/zlib）自动补齐，
 #     可选特性库在 build/libs.txt（freetype/libjpeg/libwebp/libavif）---
-gd
+# gd
 
 # --- 对照官方 defaultExtensions 增补（2026-08-16，A+B 层）---
 # A 层（缺失即坑）：readline（artisan tinker 交互基础）
