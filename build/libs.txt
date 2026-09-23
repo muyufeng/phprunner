@@ -23,7 +23,7 @@
 #   libjpeg ：JPEG 编解码
 #   libwebp ：WebP 编解码
 #   libavif ：AVIF 编解码
-# freetype
-# libjpeg
-# libwebp
-# libavif
+freetype
+libjpeg
+libwebp
+libavif
